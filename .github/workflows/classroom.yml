@@ -1,4 +1,33 @@
-- name: Push Grade directly to Google Classroom Gradebook
+name: Uplift Autograding Engine
+on: [push]
+
+jobs:
+  grade-assignment:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Student Code
+        uses: actions/checkout@v4
+
+      - name: Setup Java Environment
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Install Google API Frameworks
+        run: pip install google-api-python-client google-auth
+
+      - name: Compile and Test Code Execution
+        id: test
+        run: |
+          if javac Main.java && java Main | grep -q "Hello World"; then
+            echo "SCORE=100" >> $GITHUB_ENV
+          else
+            echo "SCORE=0" >> $GITHUB_ENV
+          fi
+        continue-on-error: true
+
+      - name: Push Grade directly to Google Classroom Gradebook
         if: always()
         env:
           GCP_CLIENT_ID: ${{ secrets.GCP_CLIENT_ID }}
@@ -22,11 +51,9 @@
           if not student_email:
               print('Error: No email discovered in student.txt'); sys.exit(0)
 
-          # Decoded numeric IDs for your specific class and assignment
           COURSE_ID = '855468352484'       
           COURSEWORK_ID = '798450635715' 
 
-          # Authenticate as YOU using the OAuth 2.0 Refresh Token
           creds = Credentials(
               None,
               refresh_token=os.getenv('GCP_REFRESH_TOKEN'),
@@ -38,7 +65,6 @@
           service = build('classroom', 'v1', credentials=creds)
 
           try:
-              # Fetch the student's specific submission ID
               res = service.courses().courseWork().studentSubmissions().list(
                   courseId=COURSE_ID, courseWorkId=COURSEWORK_ID, userId=student_email
               ).execute()
@@ -46,7 +72,6 @@
               sub_id = res['studentSubmissions'][0]['id']
               score = float(os.getenv('FINAL_SCORE'))
 
-              # Patch the grade directly into the gradebook
               service.courses().courseWork().studentSubmissions().patch(
                   courseId=COURSE_ID, courseWorkId=COURSEWORK_ID, id=sub_id,
                   updateMask='draftGrade,assignedGrade',
